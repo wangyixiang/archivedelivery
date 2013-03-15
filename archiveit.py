@@ -1,27 +1,28 @@
 # -*- coding=utf-8 -*-
 
-#将age大于4个月的文件打包
-#打包格式，待选
+#将age大于90天的文件打包
+#打包格式，标准zip
 #打包过的目录删除以节省空间
 #对目录的删除必须使用完整的绝对路径，并且只能以专属文件夹为开头名
 #必须log
 #先完成测试部分的代码
 
-#Debug 判断文件夹age，
-#Info 对文件夹进行压缩
+#Debug 判断文件夹age, 对文件夹进行压缩
+#Warn  碰到非标准结构的目录
 #Error 压缩失败，文件夹删除失败
 
+import datetime
 import logging
 import os
 import subprocess
 import sys
 import shutil
 
+class WrongArgument(Exception): pass
 
-class ArchiveDirectory(object):
-    def __init__(self,dirname):
-        self.dirname = dirname
-        
+class ArchiveDeliveryDirectory(object):
+    def __init__(self):
+        pass
         
     def _packit(self, pack_dirname, package_name):
         self.__7zipit(pack_dirname, package_name)
@@ -60,11 +61,10 @@ class ArchiveDirectory(object):
         cmd = 'a'
         archive_type = '-tzip'
         recurse = '-r'
-        zip_filename = ''.join(zip_filename, '.zip')
-        zip_parent_dirname = os.path.dirname(zip_dirname)
+        zip_filename = ''.join([zip_filename, '.zip'])
         if stay_at_zip_parent_dir == True:
             zip_parent_dirname = os.path.dirname(zip_dirname)
-            zip_filename = ''.join(zip_parent_dirname, os.sep, zip_filename)
+            zip_filename = ''.join([zip_parent_dirname, os.sep, zip_filename])
         try:        
             subprocess.check_call([bin_cmd, cmd, archive_type, recurse, \
                                    zip_filename, zip_dirname])
@@ -73,7 +73,7 @@ class ArchiveDirectory(object):
         except subprocess.CalledProcessError as cpe:
             logging.error('failed on packing %s.\n %s'% \
                           (zip_dirname, cpe.output))
-            raise SystemError("failure happen at packing process.")
+            raise SystemError("failure happen in packing process.")
             
         
     def _removeit(self, dirname):
@@ -84,22 +84,68 @@ class ArchiveDirectory(object):
             logging.exception('removing %s failed.')
             
     def __dircheck(self, dirname):
-        path = os.path.splitdrive(dirname)[1]
-        path = path.lstrip(os.sep)
-        pathcomps = path.split(os.sep)
-        if (pathcomps[0].lower() != 'builds') and \
-           ((pathcomps[1].lower() != 'applications') or \
-            (pathcomps[1].lower() != 'components')):
-            logging.error("remove operation denied! %s should not be touched."\
-                          % dirname)
-            return False
-        if (pathcomps[3].lower() != 'auto'):
-            logging.error("remove operation denied! Only the data under auto directory can be touched.")
-            return False
-        return True
+        if sys.platform == 'win32':
+            path = os.path.splitdrive(dirname)[1]
+            path = os.path.normpath(path)
+            path = path.lstrip(os.sep)
+            pathcomps = path.split(os.sep)
+            if (pathcomps[0].lower() != 'builds') and \
+               ((pathcomps[1].lower() != 'applications') or \
+                (pathcomps[1].lower() != 'components')):
+                logging.error("%s should not be touched."\
+                              % dirname)
+                return False
+            if (pathcomps[3].lower() != 'auto'):
+                logging.error("Only the data under auto directory can be touched.")
+                return False
+            return True
+        return False
     
     def archiveit(self):
-        pass
+        dirs_under_auto = os.listdir(self.dirname)
+        for dir_under_auto in dirs_under_auto:
+            if dir_under_auto.find('atest') != -1:
+                continue
+            try:
+                if not dir_under_auto[-6:-1].isdigit():
+                    logging.warn("%s is not in normal structure!" % dir_under_auto)
+                    continue
+            except Exception:
+                logging.warn("%s is not in normal structure!" % dir_under_auto)
+                continue
+                
+            fulldir_under_auto = os.path.join(self.dirname, dir_under_auto)
+            if os.path.isdir(fulldir_under_auto):
+                if self._olderthan(fulldir_under_auto, 90):
+                    try:
+                        self._packit(fulldir_under_auto, dir_under_auto)
+                        self._removeit(fulldir_under_auto)
+                    except Exception:
+                        logging.error('problem happened in archiving %s !' %
+                                      fulldir_under_auto)
+    
+    def _olderthan(self, dirname, day=None):
+        """
+        on windows, os.path.getmtime get the timestamp from epoch of 
+        modification, we use modification time not creation time.
+        """
+        if day == None:
+            return False
+        if sys.platform == 'win32':
+            datedelta = datetime.timedelta(day)
+            olddatethreshold = datetime.date.today() - datedelta
+            try:
+                mtimestamp = os.path.getmtime(dirname)
+                mdate = datetime.date.fromtimestamp(mtimestamp)
+                if mdate < olddatethreshold:
+                    logging.debug('%s is older than %d days.' % (dirname, day)) 
+                    return True
+                logging.debug('%s is NOT old than %d days.' % (dirname, day))
+                return False
+            except os.error:
+                logging.error('failed on getting mtime of %s.' % (dirname))
+                return False
+        return False
     
     @property
     def dirname(self):
@@ -107,15 +153,39 @@ class ArchiveDirectory(object):
     
     @dirname.setter
     def dirname(self, dirname):
-        if dirname != None:
-            if sys.platform == 'win32':
-                if dir[1] != ':':
-                    logging.error('The directory name must be absolute path name.')
-                    raise SystemError('The directory name must be absolute path name.')
-            elif sys.platform == 'linux2':
-                if dir[0] != os.sep:
-                    logging.error('The directory name must be absolute path name.')
-                    raise SystemError('The directory name must be absolute path name.')
-            else:
-                raise NotImplementedError()
-            self._dirname = dirname
+        if (dirname == None) or (not isinstance(dirname, str)):
+            logging.error('"dirname" argument is not satisfied the conditions!')
+            raise WrongArgument
+            
+        if sys.platform == 'win32':
+            if dirname[1] != ':':
+                logging.error('The directory name must be absolute path name.')
+                raise SystemError('The directory name must be absolute path name.')
+            if self.__dircheck(dirname) == True:
+                self._dirname = dirname
+        elif sys.platform == 'linux2':
+            if dirname[0] != os.sep:
+                logging.error('The directory name must be absolute path name.')
+                raise SystemError('The directory name must be absolute path name.')
+        else:
+            raise NotImplementedError()
+
+def archive_build_releases():
+    comp_dir = r'E:\Builds\Components'
+    app_dir = r'E:\Builds\Applications'
+    archiver = ArchiveDeliveryDirectory()
+
+    if comp_dir.strip() != r'':
+        comps = os.listdir(comp_dir)
+        for comp in comps:
+            archiver.dirname = os.path.join(comp_dir, comp, 'Auto')
+            archiver.archiveit()
+        
+    if app_dir.strip() != r'':
+        apps = os.listdir(app_dir)        
+        for app in apps:
+            archiver.dirname = os.path.join(app_dir, app, 'Auto')
+            archiver.archiveit()
+
+if __name__ == '__main__':
+    archive_build_releases()

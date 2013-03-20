@@ -102,6 +102,9 @@ class ArchiveDeliveryDirectory(object):
         return False
     
     def archiveit(self):
+        if not os.path.isdir(self.dirname):
+            logging.warn("%s is not a directory." % self.dirname)
+            return
         dirs_under_auto = os.listdir(self.dirname)
         for dir_under_auto in dirs_under_auto:
             if dir_under_auto.find('atest') != -1:
@@ -188,4 +191,20 @@ def archive_build_releases():
             archiver.archiveit()
 
 if __name__ == '__main__':
-    archive_build_releases()
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler('ai.log')
+    fh.setLevel(logging.WARNING)
+    fh_info = logging.FileHandler('ai_debug.log',mode='w')
+    fh_info.setLevel(logging.DEBUG)
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    # create formatter and add it to the handlers
+    formatter = logging.Formatter('%(asctime)s-%(name)s-%(levelname)s-%(message)s')
+    ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
+    fh_info.setFormatter(formatter)
+    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().addHandler(ch)
+    logging.getLogger().addHandler(fh)
+    logging.getLogger().addHandler(fh_info)

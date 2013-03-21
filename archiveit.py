@@ -111,7 +111,8 @@ class ArchiveDeliveryDirectory(object):
                 if os.path.splitext(dir_under_auto)[1].lower() == '.zip':
                     continue
                 else:
-                    logging.warn('%s is not an archive file.')
+                    logging.warn('%s is not an archive file.'% 
+                                 os.path.join(self.dirname, dir_under_auto))
                     continue
             if dir_under_auto.lower().find('latest') != -1:
                 continue

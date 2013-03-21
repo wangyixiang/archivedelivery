@@ -107,10 +107,16 @@ class ArchiveDeliveryDirectory(object):
             return
         dirs_under_auto = os.listdir(self.dirname)
         for dir_under_auto in dirs_under_auto:
-            if dir_under_auto.find('atest') != -1:
+            if not os.path.isdir(os.path.join(self.dirname, dir_under_auto)):
+                if os.path.splitext(dir_under_auto)[1].lower() == '.zip':
+                    continue
+                else:
+                    logging.warn('%s is not an archive file.')
+                    continue
+            if dir_under_auto.lower().find('latest') != -1:
                 continue
             try:
-                if not dir_under_auto[-6:-1].isdigit():
+                if not dir_under_auto[-6:].isdigit():
                     logging.warn("%s is not in normal structure!" % 
                                  os.path.join(self.dirname, dir_under_auto))
                     continue

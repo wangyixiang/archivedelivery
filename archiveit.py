@@ -81,7 +81,7 @@ class ArchiveDeliveryDirectory(object):
             if self.__dircheck(dirname) == True:
                 shutil.rmtree(dirname)
         except Exception as err:
-            logging.exception('removing %s failed.')
+            logging.exception('removing %s failed.' % dirname)
             
     def __dircheck(self, dirname):
         if sys.platform == 'win32':
@@ -111,10 +111,12 @@ class ArchiveDeliveryDirectory(object):
                 continue
             try:
                 if not dir_under_auto[-6:-1].isdigit():
-                    logging.warn("%s is not in normal structure!" % dir_under_auto)
+                    logging.warn("%s is not in normal structure!" % 
+                                 os.path.join(self.dirname, dir_under_auto))
                     continue
             except Exception:
-                logging.warn("%s is not in normal structure!" % dir_under_auto)
+                logging.warn("%s is not in normal structure!" % 
+                             os.path.join(self.dirname, dir_under_auto))
                 continue
                 
             fulldir_under_auto = os.path.join(self.dirname, dir_under_auto)
@@ -125,7 +127,7 @@ class ArchiveDeliveryDirectory(object):
                         self._removeit(fulldir_under_auto)
                     except Exception:
                         logging.error('problem happened in archiving %s !' %
-                                      fulldir_under_auto)
+                                      os.path.join(self.dirname, dir_under_auto))
     
     def _olderthan(self, dirname, day=None):
         """
